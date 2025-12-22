@@ -62,13 +62,13 @@ const STORAGE_API_KEY = 'gemini-demo.apiKey.v1'
 const STORAGE_CONFIG = 'gemini-demo.config.v1'
 
 const DEFAULT_SETTINGS: SessionSettings = {
-  model: 'gemini-2.0-flash',
+  model: 'gemini-2.5-flash',
   temperature: 0.7,
   topP: 0.9,
-  maxTokens: 1024,
+  maxTokens: 102400000,
   systemPrompt:
     'You are Gemini Studio. Be concise, helpful, and structure output with short sections.',
-  youtubeMode: false,
+  youtubeMode: true,
   youtubeUrls: '',
 }
 
