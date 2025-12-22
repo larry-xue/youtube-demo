@@ -1,6 +1,6 @@
 @import 'tailwindcss';
-
 @import 'tw-animate-css';
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
@@ -11,6 +11,15 @@ body {
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.gemini-demo {
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+}
+
+.gemini-demo code,
+.gemini-demo pre {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
 }
 
 code {

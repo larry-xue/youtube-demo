@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DemoMcpTodosRouteImport } from './routes/demo/mcp-todos'
+import { Route as DemoGeminiRouteImport } from './routes/demo/gemini'
 import { Route as DemoStartServerFuncsRouteImport } from './routes/demo/start.server-funcs'
 import { Route as DemoStartApiRequestRouteImport } from './routes/demo/start.api-request'
 import { Route as DemoApiNamesRouteImport } from './routes/demo/api.names'
@@ -34,6 +35,11 @@ const IndexRoute = IndexRouteImport.update({
 const DemoMcpTodosRoute = DemoMcpTodosRouteImport.update({
   id: '/demo/mcp-todos',
   path: '/demo/mcp-todos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoGeminiRoute = DemoGeminiRouteImport.update({
+  id: '/demo/gemini',
+  path: '/demo/gemini',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoStartServerFuncsRoute = DemoStartServerFuncsRouteImport.update({
@@ -80,6 +86,7 @@ const DemoStartSsrDataOnlyRoute = DemoStartSsrDataOnlyRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/mcp': typeof McpRoute
+  '/demo/gemini': typeof DemoGeminiRoute
   '/demo/mcp-todos': typeof DemoMcpTodosRoute
   '/demo/api/mcp-todos': typeof DemoApiMcpTodosRoute
   '/demo/api/names': typeof DemoApiNamesRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/mcp': typeof McpRoute
+  '/demo/gemini': typeof DemoGeminiRoute
   '/demo/mcp-todos': typeof DemoMcpTodosRoute
   '/demo/api/mcp-todos': typeof DemoApiMcpTodosRoute
   '/demo/api/names': typeof DemoApiNamesRoute
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/mcp': typeof McpRoute
+  '/demo/gemini': typeof DemoGeminiRoute
   '/demo/mcp-todos': typeof DemoMcpTodosRoute
   '/demo/api/mcp-todos': typeof DemoApiMcpTodosRoute
   '/demo/api/names': typeof DemoApiNamesRoute
@@ -122,6 +131,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/mcp'
+    | '/demo/gemini'
     | '/demo/mcp-todos'
     | '/demo/api/mcp-todos'
     | '/demo/api/names'
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/mcp'
+    | '/demo/gemini'
     | '/demo/mcp-todos'
     | '/demo/api/mcp-todos'
     | '/demo/api/names'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/mcp'
+    | '/demo/gemini'
     | '/demo/mcp-todos'
     | '/demo/api/mcp-todos'
     | '/demo/api/names'
@@ -162,6 +174,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   McpRoute: typeof McpRoute
+  DemoGeminiRoute: typeof DemoGeminiRoute
   DemoMcpTodosRoute: typeof DemoMcpTodosRoute
   DemoApiMcpTodosRoute: typeof DemoApiMcpTodosRoute
   DemoApiNamesRoute: typeof DemoApiNamesRoute
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/demo/mcp-todos'
       fullPath: '/demo/mcp-todos'
       preLoaderRoute: typeof DemoMcpTodosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/demo/gemini': {
+      id: '/demo/gemini'
+      path: '/demo/gemini'
+      fullPath: '/demo/gemini'
+      preLoaderRoute: typeof DemoGeminiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo/start/server-funcs': {
@@ -258,6 +278,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   McpRoute: McpRoute,
+  DemoGeminiRoute: DemoGeminiRoute,
   DemoMcpTodosRoute: DemoMcpTodosRoute,
   DemoApiMcpTodosRoute: DemoApiMcpTodosRoute,
   DemoApiNamesRoute: DemoApiNamesRoute,
