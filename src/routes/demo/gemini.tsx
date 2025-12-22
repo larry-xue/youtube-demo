@@ -59,6 +59,7 @@ type Session = {
 const STORAGE_SESSIONS = 'gemini-demo.sessions.v1'
 const STORAGE_ACTIVE = 'gemini-demo.active.v1'
 const STORAGE_API_KEY = 'gemini-demo.apiKey.v1'
+const STORAGE_CONFIG = 'gemini-demo.config.v1'
 
 const DEFAULT_SETTINGS: SessionSettings = {
   model: 'gemini-2.0-flash',
@@ -81,9 +82,16 @@ export const Route = createFileRoute('/demo/gemini')({
 })
 
 function GeminiDemo() {
+  const [defaultConfig, setDefaultConfig] = useState<SessionSettings>(() => {
+    const storedConfig = loadFromStorage<SessionSettings>(STORAGE_CONFIG)
+    return storedConfig
+      ? { ...DEFAULT_SETTINGS, ...storedConfig }
+      : { ...DEFAULT_SETTINGS }
+  })
+
   const initialSessionRef = useRef<Session | null>(null)
   if (!initialSessionRef.current) {
-    initialSessionRef.current = createSession()
+    initialSessionRef.current = createSession(defaultConfig)
   }
 
   const [sessions, setSessions] = useState<Session[]>(() => [
@@ -115,18 +123,26 @@ function GeminiDemo() {
     const storedSessions = loadFromStorage<Session[]>(STORAGE_SESSIONS)
     const storedActive = loadFromStorage<string>(STORAGE_ACTIVE)
     const storedKey = loadFromStorage<string>(STORAGE_API_KEY)
+    const storedConfig = loadFromStorage<SessionSettings>(STORAGE_CONFIG)
 
     if (storedSessions?.length) {
       setSessions(storedSessions)
       setActiveSessionId(storedActive || storedSessions[0].id)
     } else {
-      const initial = createSession()
+      const resolvedConfig = storedConfig
+        ? { ...DEFAULT_SETTINGS, ...storedConfig }
+        : { ...DEFAULT_SETTINGS }
+      setDefaultConfig(resolvedConfig)
+      const initial = createSession(resolvedConfig)
       setSessions([initial])
       setActiveSessionId(initial.id)
     }
 
     if (storedKey) {
       setApiKey(storedKey)
+    }
+    if (storedConfig) {
+      setDefaultConfig({ ...DEFAULT_SETTINGS, ...storedConfig })
     }
   }, [])
 
@@ -146,7 +162,7 @@ function GeminiDemo() {
   }, [apiKey])
 
   const handleNewSession = () => {
-    const next = createSession()
+    const next = createSession(defaultConfig)
     setSessions((prev) => [next, ...prev])
     setActiveSessionId(next.id)
   }
@@ -155,7 +171,7 @@ function GeminiDemo() {
     setSessions((prev) => {
       const remaining = prev.filter((session) => session.id !== sessionId)
       if (remaining.length === 0) {
-        const fallback = createSession()
+        const fallback = createSession(defaultConfig)
         setActiveSessionId(fallback.id)
         return [fallback]
       }
@@ -354,11 +370,14 @@ function GeminiDemo() {
     patch: Partial<SessionSettings>,
   ) => {
     if (!activeSession) return
+    const nextSettings = { ...activeSession.settings, ...patch }
     updateSessionById(activeSession.id, (session) => ({
       ...session,
-      settings: { ...session.settings, ...patch },
+      settings: nextSettings,
       updatedAt: Date.now(),
     }))
+    setDefaultConfig(nextSettings)
+    saveToStorage(STORAGE_CONFIG, nextSettings)
   }
 
   return (
@@ -783,7 +802,7 @@ function GeminiDemo() {
   )
 }
 
-function createSession(): Session {
+function createSession(settings: SessionSettings = DEFAULT_SETTINGS): Session {
   const now = Date.now()
   return {
     id: createId('session'),
@@ -791,7 +810,7 @@ function createSession(): Session {
     createdAt: now,
     updatedAt: now,
     messages: [],
-    settings: { ...DEFAULT_SETTINGS },
+    settings: { ...settings },
   }
 }
 
