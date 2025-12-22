@@ -1,5 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { chat, type ModelMessage, type StreamChunk } from '@tanstack/ai'
+import {
+  chat,
+  type ContentPart,
+  type ModelMessage,
+  type StreamChunk,
+} from '@tanstack/ai'
 import {
   GeminiTextModels,
   createGeminiChat,
@@ -21,6 +26,7 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   createdAt: number
+  attachments?: string[]
   status?: 'streaming' | 'done' | 'error'
   finishReason?: string
   usage?: {
@@ -37,6 +43,8 @@ type SessionSettings = {
   topP: number
   maxTokens: number
   systemPrompt: string
+  youtubeMode: boolean
+  youtubeUrls: string
 }
 
 type Session = {
@@ -59,6 +67,8 @@ const DEFAULT_SETTINGS: SessionSettings = {
   maxTokens: 1024,
   systemPrompt:
     'You are Gemini Studio. Be concise, helpful, and structure output with short sections.',
+  youtubeMode: false,
+  youtubeUrls: '',
 }
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -189,11 +199,31 @@ function GeminiDemo() {
       return
     }
 
+    const youtubeMode = activeSession.settings.youtubeMode ?? false
+    const youtubeUrls = parseYoutubeUrls(
+      activeSession.settings.youtubeUrls ?? '',
+    )
+    if (youtubeMode && youtubeUrls.length === 0) {
+      setStatusMessage('Add at least one YouTube URL for this mode.')
+      return
+    }
+
+    const youtubeLimit = getYoutubeLimit(activeSession.settings.model)
+    if (youtubeMode && youtubeUrls.length > youtubeLimit) {
+      setStatusMessage(
+        `This model supports up to ${youtubeLimit} YouTube URL${
+          youtubeLimit === 1 ? '' : 's'
+        } per request.`,
+      )
+      return
+    }
+
     const userMessage: ChatMessage = {
       id: createId('user'),
       role: 'user',
       content: input.trim(),
       createdAt: Date.now(),
+      attachments: youtubeMode ? youtubeUrls : undefined,
     }
     const assistantMessage: ChatMessage = {
       id: createId('assistant'),
@@ -209,9 +239,9 @@ function GeminiDemo() {
 
     const sessionId = activeSession.id
     const requestMessages = [
-      ...activeSession.messages,
-      userMessage,
-    ].map(toModelMessage)
+      ...activeSession.messages.map(toModelMessage),
+      toModelMessage(userMessage),
+    ]
 
     updateSessionById(sessionId, (session) => ({
       ...session,
@@ -461,6 +491,18 @@ function GeminiDemo() {
                       }`}
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
+                      {message.attachments?.length ? (
+                        <div className="mt-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/70">
+                          <p className="text-white/50">YouTube URLs</p>
+                          <ul className="mt-1 space-y-1">
+                            {message.attachments.map((url) => (
+                              <li key={url} className="break-all">
+                                {url}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/50">
                         <span>{DATE_FORMATTER.format(message.createdAt)}</span>
                         {message.status === 'streaming' && (
@@ -658,6 +700,57 @@ function GeminiDemo() {
                   />
                 </div>
 
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-white/50">
+                        YouTube Mode
+                      </p>
+                      <p className="text-sm text-white/70">
+                        Pass YouTube URLs directly to Gemini.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-white/60">
+                      <input
+                        type="checkbox"
+                        checked={activeSession?.settings.youtubeMode ?? false}
+                        onChange={(event) =>
+                          handleSettingsChange({
+                            youtubeMode: event.target.checked,
+                          })
+                        }
+                        className="h-4 w-4 rounded border-white/20 bg-black/40 text-amber-200"
+                      />
+                      Enable
+                    </label>
+                  </div>
+                  {activeSession?.settings.youtubeMode && (
+                    <div className="mt-3">
+                      <label className="text-xs uppercase tracking-[0.2em] text-white/50">
+                        YouTube URLs
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={
+                          activeSession?.settings.youtubeUrls ??
+                          DEFAULT_SETTINGS.youtubeUrls
+                        }
+                        onChange={(event) =>
+                          handleSettingsChange({
+                            youtubeUrls: event.target.value,
+                          })
+                        }
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-amber-200/60"
+                      />
+                      <p className="mt-2 text-[11px] text-white/50">
+                        Limits: free tier is 8 hours/day. Gemini 2.5+ supports
+                        up to 10 videos per request. Older models allow 1.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="text-xs uppercase tracking-[0.2em] text-white/50">
                     System Prompt
@@ -729,6 +822,19 @@ function saveToStorage<T>(key: string, value: T) {
 }
 
 function toModelMessage(message: ChatMessage): ModelMessage {
+  if (message.role === 'user' && message.attachments?.length) {
+    const parts: ContentPart[] = [
+      { type: 'text', content: message.content },
+      ...message.attachments.map((url) => ({
+        type: 'video',
+        source: { type: 'file', value: url },
+      })),
+    ]
+    return {
+      role: message.role,
+      content: parts,
+    }
+  }
   return {
     role: message.role,
     content: message.content,
@@ -739,4 +845,15 @@ function deriveTitle(message: ChatMessage) {
   const trimmed = message.content.trim()
   if (!trimmed) return 'New Session'
   return trimmed.length > 28 ? `${trimmed.slice(0, 28)}...` : trimmed
+}
+
+function parseYoutubeUrls(input: string) {
+  return input
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+function getYoutubeLimit(model: string) {
+  return model.includes('2.5') ? 10 : 1
 }
