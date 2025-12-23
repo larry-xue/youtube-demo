@@ -77,7 +77,7 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 })
 
-export const Route = createFileRoute('/demo/gemini')({
+export const Route = createFileRoute('/gemini')({
   component: GeminiDemo,
 })
 
@@ -511,15 +511,49 @@ function GeminiDemo() {
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
                       {message.attachments?.length ? (
-                        <div className="mt-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/70">
-                          <p className="text-white/50">YouTube URLs</p>
-                          <ul className="mt-1 space-y-1">
-                            {message.attachments.map((url) => (
-                              <li key={url} className="break-all">
-                                {url}
-                              </li>
-                            ))}
-                          </ul>
+                        <div className="mt-3 space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {message.attachments.map((url) => {
+                              const embedUrl = getYoutubeEmbedUrl(url)
+                              return embedUrl ? (
+                                <div
+                                  key={url}
+                                  className="overflow-hidden rounded-xl border border-white/10 bg-black/30"
+                                >
+                                  <iframe
+                                    className="aspect-video w-full"
+                                    src={embedUrl}
+                                    title="YouTube preview"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    loading="lazy"
+                                    allowFullScreen
+                                    width="400px"
+                                    height="300px"
+                                  />
+                                </div>
+                              ) : (
+                                <div
+                                  key={url}
+                                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/70"
+                                >
+                                  <p className="text-white/50">
+                                    Invalid YouTube URL
+                                  </p>
+                                  <p className="break-all">{url}</p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-white/70">
+                            <p className="text-white/50">YouTube URLs</p>
+                            <ul className="mt-1 space-y-1">
+                              {message.attachments.map((url) => (
+                                <li key={url} className="break-all">
+                                  {url}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         </div>
                       ) : null}
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-white/50">
@@ -871,6 +905,36 @@ function parseYoutubeUrls(input: string) {
     .split(/\s+/)
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+function getYoutubeEmbedUrl(input: string): string | null {
+  const normalized = input.trim()
+  if (!normalized) return null
+  try {
+    const url = new URL(normalized)
+    const hostname = url.hostname.replace(/^www\./, '')
+    let id = ''
+
+    if (hostname === 'youtu.be') {
+      id = url.pathname.slice(1)
+    } else if (hostname.endsWith('youtube.com')) {
+      if (url.pathname === '/watch') {
+        id = url.searchParams.get('v') ?? ''
+      } else if (url.pathname.startsWith('/shorts/')) {
+        id = url.pathname.replace('/shorts/', '')
+      } else if (url.pathname.startsWith('/embed/')) {
+        id = url.pathname.replace('/embed/', '')
+      }
+    }
+
+    if (!id) return null
+    const cleanId = id.split(/[?&/]/)[0]
+    return cleanId
+      ? `https://www.youtube.com/embed/${cleanId}`
+      : null
+  } catch {
+    return null
+  }
 }
 
 function getYoutubeLimit(model: string) {

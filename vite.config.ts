@@ -11,7 +11,6 @@ const config = defineConfig({
   plugins: [
     devtools(),
     nitro(),
-    cloudflare(),
     // this is the plugin that enables path aliases
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
@@ -19,6 +18,7 @@ const config = defineConfig({
     tailwindcss(),
     tanstackStart(),
     viteReact(),
+    cloudflare(),
   ],
 })
 
