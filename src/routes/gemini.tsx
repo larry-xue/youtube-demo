@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Check,
   CircleStop,
+  DollarSign,
   KeyRound,
   Plus,
   Sparkles,
@@ -77,6 +78,69 @@ const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   minute: '2-digit',
 })
 
+// Pricing for Gemini 3 Pro Preview (per 1M tokens unless otherwise noted)
+const GEMINI_3_PRO_PRICING = {
+  model: 'gemini-3-pro-preview',
+  input: {
+    textOrImage: 2.0, // $2.00 per 1M tokens (text/image)
+    perImageEquivalent: 0.0011, // $0.0011 per image
+  },
+  output: {
+    textAndThinking: 12.0, // $12.00 per 1M tokens (text and thinking)
+    images: 120.0, // $120.00 per 1M tokens for images
+    per1k2kImage: 0.134, // $0.134 per 1K/2K image
+    per4kImage: 0.24, // $0.24 per 4K image
+  },
+}
+
+type CostEstimate = {
+  inputTokens: number
+  outputTokens: number
+  thinkingTokens: number
+  inputCost: number
+  outputCost: number
+  thinkingCost: number
+  totalCost: number
+  model: string
+}
+
+function calculateCost(
+  promptTokens: number,
+  completionTokens: number,
+  thinkingTokens: number = 0,
+  model: string = 'gemini-3-pro-preview',
+): CostEstimate {
+  // Default prices (Gemini 3 Pro Preview)
+  const inputPricePerMillion = GEMINI_3_PRO_PRICING.input.textOrImage
+  const outputPricePerMillion = GEMINI_3_PRO_PRICING.output.textAndThinking
+
+  const inputCost = (promptTokens / 1_000_000) * inputPricePerMillion
+  const outputCost = (completionTokens / 1_000_000) * outputPricePerMillion
+  const thinkingCost = (thinkingTokens / 1_000_000) * outputPricePerMillion
+
+  return {
+    inputTokens: promptTokens,
+    outputTokens: completionTokens,
+    thinkingTokens,
+    inputCost,
+    outputCost,
+    thinkingCost,
+    totalCost: inputCost + outputCost + thinkingCost,
+    model,
+  }
+}
+
+function formatCurrency(value: number): string {
+  if (value < 0.0001 && value > 0) {
+    return `$${value.toExponential(2)}`
+  }
+  return `$${value.toFixed(6)}`
+}
+
+function formatNumber(value: number): string {
+  return value.toLocaleString('en-US')
+}
+
 export const Route = createFileRoute('/gemini')({
   component: GeminiDemo,
 })
@@ -114,6 +178,31 @@ function GeminiDemo() {
     () => sessions.find((session) => session.id === activeSessionId),
     [sessions, activeSessionId],
   )
+
+  // Cost estimation for current session
+  const sessionCostEstimate = useMemo(() => {
+    if (!activeSession) return null
+
+    let totalInputTokens = 0
+    let totalOutputTokens = 0
+    let totalThinkingTokens = 0
+
+    for (const message of activeSession.messages) {
+      if (message.usage) {
+        totalInputTokens += message.usage.promptTokens || 0
+        totalOutputTokens += message.usage.completionTokens || 0
+        // Thinking tokens are usually included in completion tokens for Gemini
+        // but some models report them separately
+      }
+    }
+
+    return calculateCost(
+      totalInputTokens,
+      totalOutputTokens,
+      totalThinkingTokens,
+      activeSession.settings.model,
+    )
+  }, [activeSession])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -188,10 +277,10 @@ function GeminiDemo() {
       prev.map((session) =>
         session.id === activeSession.id
           ? {
-              ...session,
-              messages: [],
-              updatedAt: Date.now(),
-            }
+            ...session,
+            messages: [],
+            updatedAt: Date.now(),
+          }
           : session,
       ),
     )
@@ -227,8 +316,7 @@ function GeminiDemo() {
     const youtubeLimit = getYoutubeLimit(activeSession.settings.model)
     if (youtubeMode && youtubeUrls.length > youtubeLimit) {
       setStatusMessage(
-        `This model supports up to ${youtubeLimit} YouTube URL${
-          youtubeLimit === 1 ? '' : 's'
+        `This model supports up to ${youtubeLimit} YouTube URL${youtubeLimit === 1 ? '' : 's'
         } per request.`,
       )
       return
@@ -440,11 +528,10 @@ function GeminiDemo() {
                   <button
                     key={session.id}
                     onClick={() => setActiveSessionId(session.id)}
-                    className={`group flex items-start justify-between rounded-2xl border px-3 py-3 text-left transition ${
-                      session.id === activeSessionId
-                        ? 'border-amber-200/50 bg-amber-200/10 text-white shadow-[0_16px_36px_rgba(255,199,128,0.12)]'
-                        : 'border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
-                    }`}
+                    className={`group flex items-start justify-between rounded-2xl border px-3 py-3 text-left transition ${session.id === activeSessionId
+                      ? 'border-amber-200/50 bg-amber-200/10 text-white shadow-[0_16px_36px_rgba(255,199,128,0.12)]'
+                      : 'border-white/10 bg-white/5 text-white/70 hover:border-white/25 hover:text-white'
+                      }`}
                   >
                     <div className="flex flex-1 flex-col gap-1">
                       <span className="text-sm font-medium">
@@ -498,16 +585,14 @@ function GeminiDemo() {
                 {activeSession?.messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-[0_12px_24px_rgba(0,0,0,0.2)] ${
-                        message.role === 'user'
-                          ? 'bg-gradient-to-br from-amber-200/20 to-amber-100/10 text-white'
-                          : 'bg-white/10 text-white/90'
-                      }`}
+                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-[0_12px_24px_rgba(0,0,0,0.2)] ${message.role === 'user'
+                        ? 'bg-gradient-to-br from-amber-200/20 to-amber-100/10 text-white'
+                        : 'bg-white/10 text-white/90'
+                        }`}
                     >
                       <p className="whitespace-pre-wrap">{message.content}</p>
                       {message.attachments?.length ? (
@@ -828,6 +913,217 @@ function GeminiDemo() {
                   demos. For production, proxy requests through a server.
                 </div>
               </div>
+            </div>
+          </section>
+
+          {/* Cost Estimation Panel */}
+          <section className="animate-in fade-in duration-700 lg:col-span-3">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,0.35)]">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-white/60">
+                  费用预估 (Gemini 3 Pro Preview)
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-white/50">
+                  <DollarSign className="h-4 w-4 text-emerald-300" />
+                  实时计算
+                </div>
+              </div>
+
+              {/* Pricing Info */}
+              <div className="mb-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
+                  Gemini 3 Pro Preview 定价
+                </h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* Input Pricing */}
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-[0.15em] text-amber-200">
+                      输入价格
+                    </p>
+                    <div className="space-y-1 text-sm text-white/80">
+                      <p>
+                        <span className="text-white/50">文本/图片:</span>{' '}
+                        <span className="font-mono text-emerald-300">$2.00</span>{' '}
+                        <span className="text-xs text-white/40">/1M tokens</span>
+                      </p>
+                      <p>
+                        <span className="text-white/50">每张图片约:</span>{' '}
+                        <span className="font-mono text-emerald-300">$0.0011</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Output Pricing */}
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-[0.15em] text-amber-200">
+                      输出价格
+                    </p>
+                    <div className="space-y-1 text-sm text-white/80">
+                      <p>
+                        <span className="text-white/50">文本+思考:</span>{' '}
+                        <span className="font-mono text-emerald-300">$12.00</span>{' '}
+                        <span className="text-xs text-white/40">/1M tokens</span>
+                      </p>
+                      <p>
+                        <span className="text-white/50">图片输出:</span>{' '}
+                        <span className="font-mono text-emerald-300">$120.00</span>{' '}
+                        <span className="text-xs text-white/40">/1M tokens</span>
+                      </p>
+                      <p>
+                        <span className="text-white/50">1K/2K图片:</span>{' '}
+                        <span className="font-mono text-emerald-300">$0.134</span>{' '}
+                        <span className="text-xs text-white/40">/张</span>
+                      </p>
+                      <p>
+                        <span className="text-white/50">4K图片:</span>{' '}
+                        <span className="font-mono text-emerald-300">$0.24</span>{' '}
+                        <span className="text-xs text-white/40">/张</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Session Stats */}
+              {sessionCostEstimate && (
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-900/10 p-4">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                    当前会话费用
+                  </h3>
+                  <div className="grid gap-4 md:grid-cols-4">
+                    {/* Input Tokens */}
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center">
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.15em] text-white/50">
+                        输入 Tokens
+                      </p>
+                      <p className="text-lg font-semibold text-white">
+                        {formatNumber(sessionCostEstimate.inputTokens)}
+                      </p>
+                      <p className="mt-1 text-xs text-amber-200">
+                        {formatCurrency(sessionCostEstimate.inputCost)}
+                      </p>
+                    </div>
+
+                    {/* Output Tokens */}
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center">
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.15em] text-white/50">
+                        输出 Tokens
+                      </p>
+                      <p className="text-lg font-semibold text-white">
+                        {formatNumber(sessionCostEstimate.outputTokens)}
+                      </p>
+                      <p className="mt-1 text-xs text-amber-200">
+                        {formatCurrency(sessionCostEstimate.outputCost)}
+                      </p>
+                    </div>
+
+                    {/* Thinking Tokens */}
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-center">
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.15em] text-white/50">
+                        思考 Tokens
+                      </p>
+                      <p className="text-lg font-semibold text-white">
+                        {formatNumber(sessionCostEstimate.thinkingTokens)}
+                      </p>
+                      <p className="mt-1 text-xs text-amber-200">
+                        {formatCurrency(sessionCostEstimate.thinkingCost)}
+                      </p>
+                    </div>
+
+                    {/* Total Cost */}
+                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-900/20 p-3 text-center">
+                      <p className="mb-1 text-[11px] uppercase tracking-[0.15em] text-emerald-300/70">
+                        预估总费用
+                      </p>
+                      <p className="text-xl font-bold text-emerald-300">
+                        {formatCurrency(sessionCostEstimate.totalCost)}
+                      </p>
+                      <p className="mt-1 text-[10px] text-white/40">
+                        基于 {sessionCostEstimate.model}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Token Details Table */}
+                  <div className="mt-4 overflow-hidden rounded-xl border border-white/10">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 bg-white/5">
+                          <th className="px-3 py-2 text-left font-medium text-white/60">
+                            项目
+                          </th>
+                          <th className="px-3 py-2 text-right font-medium text-white/60">
+                            数量
+                          </th>
+                          <th className="px-3 py-2 text-right font-medium text-white/60">
+                            单价 (per 1M)
+                          </th>
+                          <th className="px-3 py-2 text-right font-medium text-white/60">
+                            费用
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-white/5">
+                          <td className="px-3 py-2 text-white/80">输入 Tokens (文本/图片)</td>
+                          <td className="px-3 py-2 text-right font-mono text-white">
+                            {formatNumber(sessionCostEstimate.inputTokens)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
+                            $2.00
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-amber-200">
+                            {formatCurrency(sessionCostEstimate.inputCost)}
+                          </td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                          <td className="px-3 py-2 text-white/80">输出 Tokens (文本+思考)</td>
+                          <td className="px-3 py-2 text-right font-mono text-white">
+                            {formatNumber(sessionCostEstimate.outputTokens)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
+                            $12.00
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-amber-200">
+                            {formatCurrency(sessionCostEstimate.outputCost)}
+                          </td>
+                        </tr>
+                        <tr className="border-b border-white/5">
+                          <td className="px-3 py-2 text-white/80">思考 Tokens</td>
+                          <td className="px-3 py-2 text-right font-mono text-white">
+                            {formatNumber(sessionCostEstimate.thinkingTokens)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-emerald-300">
+                            $12.00
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-amber-200">
+                            {formatCurrency(sessionCostEstimate.thinkingCost)}
+                          </td>
+                        </tr>
+                        <tr className="bg-emerald-900/20">
+                          <td className="px-3 py-2 font-semibold text-emerald-300" colSpan={3}>
+                            总计
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono font-bold text-emerald-300">
+                            {formatCurrency(sessionCostEstimate.totalCost)}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Notice */}
+                  <p className="mt-3 text-[11px] text-white/40">
+                    注意：此估算基于 Gemini 3 Pro Preview 的公开定价。实际费用可能因账户类型、使用量等因素略有差异。
+                  </p>
+                </div>
+              )}
+
+              {!sessionCostEstimate && (
+                <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-6 text-center text-sm text-white/60">
+                  发送消息后将显示费用预估
+                </div>
+              )}
             </div>
           </section>
         </div>
